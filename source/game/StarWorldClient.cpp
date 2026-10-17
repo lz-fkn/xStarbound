@@ -699,10 +699,10 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
         ed.highlightEffect.overrideOverlayDirectives = *(m_allEntityDirectives.overlayDirectives);
 
       if (auto interactive = as<InteractiveEntity>(entity)) {
-        if (interactive->isInteractive() || m_mainPlayer->canReachAll() || m_mainPlayer->isAdmin()) {
-          ed.highlightEffect.type = EntityHighlightEffectType::Interactive;
-          ed.highlightEffect.level = pulseLevel;
-        }
+        if (interactive->isInteractive()) {
+            ed.highlightEffect.type = EntityHighlightEffectType::Interactive;
+            ed.highlightEffect.level = pulseLevel;
+          }
       }
     } else if (inspecting) {
       if (auto inspectable = as<InspectableEntity>(entity)) {

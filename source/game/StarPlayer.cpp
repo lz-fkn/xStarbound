@@ -1689,7 +1689,7 @@ InteractiveEntityPtr Player::bestInteractionEntity(bool includeNearby) {
     return {};
 
   InteractiveEntityPtr interactiveEntity;
-  if (auto entity = world()->getInteractiveInRange(m_aimPosition, (isAdmin() || m_canReachAll) ? m_aimPosition : position(), m_interactRadius, (isAdmin() || m_canReachAll))) {
+  if (auto entity = world()->getInteractiveInRange(m_aimPosition, position(), m_interactRadius)) {
     interactiveEntity = entity;
   } else if (includeNearby) {
     Vec2F interactBias = m_walkIntoInteractBias;
@@ -1697,14 +1697,12 @@ InteractiveEntityPtr Player::bestInteractionEntity(bool includeNearby) {
       interactBias[0] *= -1;
     Vec2F pos = position() + interactBias;
 
-    if (auto entity = world()->getInteractiveInRange(pos, position(), m_interactRadius, (isAdmin() || m_canReachAll)))
+    if (auto entity = world()->getInteractiveInRange(pos, position(), m_interactRadius))
       interactiveEntity = entity;
   }
 
-  if (interactiveEntity && ((isAdmin() || m_canReachAll) || world()->canReachEntity(position(), interactRadius(), interactiveEntity->entityId()))) {
-    if (interactiveEntity->isInteractive() || isAdmin() || m_canReachAll)
-      return interactiveEntity;
-  }
+  if (interactiveEntity && world()->canReachEntity(position(), interactRadius(), interactiveEntity->entityId()))
+    return interactiveEntity;
   return {};
 }
 
