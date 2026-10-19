@@ -176,6 +176,7 @@ The following mods for xStarbound and/or OpenStarbound have special functionalit
 - [No Food Rotting](https://steamcommunity.com/sharedfiles/filedetails/?id=3484110634) — requires xStarbound, oSBM or OpenStarbound. Is client-side.
 - [Nytes Ship Parts](https://steamcommunity.com/sharedfiles/filedetails/?id=3777627193) — the OpenStarbound-specific patches require xStarbound, oSBM or OpenStarbound.
 - [OCD Tooltip Fix](https://steamcommunity.com/sharedfiles/filedetails/?id=3355387636) — technically supported by xStarbound, but unnecessary.
+- [Omnicrafter - Compact Crafting QoL] — requires xStarbound, oSBM or OpenStarbound for nested JSON patch arrays.
 - [One-For-All Compact and Perennial Crops Patch](https://steamcommunity.com/sharedfiles/filedetails/?id=3427751671), [One-For-All Perennial Crops Patch](https://steamcommunity.com/sharedfiles/filedetails/?id=3435109352) and [One-For-All Compact Crops Patch](https://steamcommunity.com/sharedfiles/filedetails/?id=3457819726) — fully supported by xStarbound.
 - [OpenStarbound WEdit](https://github.com/Mofurka/OpenStarbound-WEdit) — this WEdit fork requires OpenStarbound or xStarbound; it doesn't support xStarbound's mid-air tile placement.
 - [Pan Dimensional Vending](https://steamcommunity.com/sharedfiles/filedetails/?id=3464213838&searchtext=) — fully supported by xStarbound.
@@ -235,6 +236,10 @@ The following «[oSB]»- or «[OpenStarbound]»-tagged mods either do not actual
 - [OSB Armor Dropoff](https://steamcommunity.com/sharedfiles/filedetails/?id=3816648717) — does not actually require OpenStarbound or any other Starbound fork.
 - [TBWorkaround](https://steamcommunity.com/sharedfiles/filedetails/?id=3805772653) — does not actually require OpenStarbound or any other Starbound fork.
 - [Tiri's Accessories](https://steamcommunity.com/sharedfiles/filedetails/?id=3619906462) — has no particular OpenStarbound or xStarbound support, actually, but the items are designed for clients that support extended cosmetic slots or cosmetic overlays/underlays.
+
+The following retail mod implements an OpenStarbound feature on xStarbound:
+
+- [Sparkle items 2.0](https://steamcommunity.com/sharedfiles/filedetails/?id=3822180314) — adds rarity beams to item drops, like the OpenStarbound/oSBM default. Can't _disable_ the rarity beams on an OpenStarbound or oSBM client. This is the way rarity beams should have been implemented, not as a hardcoded fork feature.
 
 Additionally, xStarbound gives mods that change the size or number of bags in the inventory, or modify the action bar, full compatibility with existing characters «out of the box». You can also use these mods in multiplayer by enabling `"inventorySpoofing"` in your `xclient.config`, though this does have some caveats: xClient spoofs a vanilla inventory by default, letting you use inventory and action bar mods on servers _not_ running such mods (such as vanilla servers). A patch to `"networkedItemBags"` in `$assets/player.config` may be needed to play on servers running inventory mods (and/or desired to avoid issues with keycards in Frackin' Universe and Elithian Races in single-player) if you have `"inventorySpoofing"` enabled and use inventory-extending mods like bk3k's Inventory.
 
