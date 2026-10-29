@@ -915,6 +915,9 @@ public:
   ByteArray compile(String const& contents, String const& name = String());
   ByteArray compile(ByteArray const& contents, String const& name = String());
 
+  // Returns the debug info of the state.
+  lua_Debug const& debugInfo(int level = 1, const char* what = "nSlu");
+
   // Generic from/to lua conversion, calls template specialization of
   // LuaConverter for actual conversion.
   template <typename T>
@@ -938,6 +941,17 @@ public:
   LuaString createString(char const* str, size_t len);
 
   LuaTable createTable(int narr = 0, int nrec = 0);
+
+  // @LumiKalt: Converts a JsonArray or JsonObject to a lua table directly on the lua stack
+  // (see LuaDetail::jsonContainerToTable)
+  LuaTable jsonContainerToTable(Json const& container);
+
+  // @LumiKalt: The shared metatable marking a lua table as a Json array or object
+  LuaTable jsonMetatable(Json::Type type);
+
+  // @LumiKalt: Fast path for LuaDetail::tableToJsonContainer.  Sets fallback, returning
+  // nothing, if the table needs the general path.
+  Maybe<Json> tableToJsonFast(LuaTable const& table, bool& fallback);
 
   template <typename Container>
   LuaTable createTable(Container const& map);
@@ -1111,11 +1125,19 @@ private:
   static int s_luaInstructionLimitExceptionKey;
   static int s_luaRecursionLimitExceptionKey;
 
+  // @LumiKalt: Lua-stack-based optimisations for conversions between Lua values and internal JSON representations.
+  void pushJson(lua_State* state, Json const& json, int depth);
+  void pushJsonMetatable(lua_State* state, Json::Type type);
+  Maybe<Json> stackTableToJson(lua_State* state, int index, int depth, bool& fallback);
+
   lua_State* m_state;
   int m_pcallTracebackMessageHandlerRegistryId;
   int m_scriptDefaultEnvRegistryId;
   int m_wrappedFunctionMetatableRegistryId;
   int m_requireFunctionMetatableRegistryId;
+  // @LumiKalt: Lua registry IDs for the array and object metatables so they can be reused.
+  int m_jsonArrayMetatableRegistryId;
+  int m_jsonObjectMetatableRegistryId;
   HashMap<std::type_index, int> m_registeredUserDataTypes;
 
   lua_State* m_handleThread;
@@ -1131,6 +1153,7 @@ private:
   unsigned m_recursionLimit;
   int m_nullTerminated;
   HashMap<tuple<String, unsigned>, shared_ptr<LuaProfileEntry>> m_profileEntries;
+  lua_Debug m_debugInfo;
 };
 
 // Built in conversions
@@ -1886,7 +1909,10 @@ namespace LuaDetail {
   void shallowCopy(lua_State* state, int sourceIndex, int targetIndex);
 
   // From OpenStarbound: Inserts an appropriate JSON metatable into a Lua table.
-  LuaTable insertJsonMetatable(LuaEngine& engine, LuaTable const& table, Json::Type type);
+  // LuaTable insertJsonMetatable(LuaEngine& engine, LuaTable const& table, Json::Type type);
+
+  // LumiKalt: Optimised metatable insertion.
+  void insertJsonMetatable(LuaEngine& engine, LuaTable const& table, Json::Type type);
 
   // Creates a custom lua table from a JsonArray or JsonObject that has
   // slightly different behavior than a standard lua table.  The table

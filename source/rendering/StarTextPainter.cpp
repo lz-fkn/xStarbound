@@ -171,7 +171,7 @@ bool TextPainter::processWrapText(StringView text, unsigned* wrapWidth, WrapText
           }
         });
         // jump the iterator to the character after the command
-        iterator = text.utf8().begin() + commandEnd + 1;
+        iterator = StringView::const_iterator(text.utf8().begin() + commandEnd + 1, iterator);
         commandStart = commandEnd = NPos;
         continue;
       }
@@ -306,7 +306,7 @@ void TextPainter::setFontColor(Vec4B color) {
 }
 
 void TextPainter::setProcessingDirectives(StringView directives) {
-  m_renderSettings.directives = String(directives);
+  m_renderSettings.directives = Directives::cachedDirectives(String(directives));
   if (m_renderSettings.directives) {
     m_renderSettings.directives.loadOperations();
     for (auto& entry : m_renderSettings.directives.shared->entries) {

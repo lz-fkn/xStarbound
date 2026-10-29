@@ -306,8 +306,8 @@ InventoryPane::InventoryPane(MainInterface* parent, PlayerPtr player, ContainerI
     m_currentSwapSlotItem = item->descriptor();
   m_pickUpSounds = jsonToStringList(config.get("sounds").get("pickup"));
   m_putDownSounds = jsonToStringList(config.get("sounds").get("putdown"));
-  m_someUpSounds = jsonToStringList(config.get("sounds").get("someup"));
-  m_someDownSounds = jsonToStringList(config.get("sounds").get("somedown"));
+  m_someUpSounds = jsonToStringList(config.get("sounds").get("addToStack", JsonArray()));
+  m_someDownSounds = jsonToStringList(config.get("sounds").get("takeFromStack", JsonArray()));
 }
 
 void InventoryPane::displayed() {
@@ -584,16 +584,16 @@ void InventoryPane::update(float dt) {
   }
 
   if (auto item = inventory->swapSlotItem()) {
-    if (!m_currentSwapSlotItem || !item->matches(*m_currentSwapSlotItem, true))
+    if ((!m_currentSwapSlotItem || !item->matches(*m_currentSwapSlotItem, true)) && !m_pickUpSounds.empty())
       context->playAudio(RandomSource().randFrom(m_pickUpSounds));
-    else if (item->count() > m_currentSwapSlotItem->count())
+    else if (item->count() > m_currentSwapSlotItem->count() && !m_someUpSounds.empty())
       context->playAudio(RandomSource().randFrom(m_someUpSounds));
-    else if (item->count() < m_currentSwapSlotItem->count())
+    else if (item->count() < m_currentSwapSlotItem->count() && !m_someDownSounds.empty())
       context->playAudio(RandomSource().randFrom(m_someDownSounds));
 
     m_currentSwapSlotItem = item->descriptor();
   } else {
-    if (m_currentSwapSlotItem)
+    if (m_currentSwapSlotItem && !m_putDownSounds.empty())
       context->playAudio(RandomSource().randFrom(m_putDownSounds));
     m_currentSwapSlotItem = {};
   }

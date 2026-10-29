@@ -12,6 +12,23 @@ Json const BaseAssetsSettings = Json::parseJson(R"JSON(
     {
       "assetTimeToLive" : 30,
 
+      // @LumiKalt: Images that directives refer to (blend and mask images) are decoded again every time they are needed after they expire,
+      // which takes far longer than applying them, so they are kept this many seconds after their last use, as long as together
+      // they are no more than this many pixels (16 million pixels is 64 MB decoded).
+      "referenceImageTimeToLive" : 300,
+      "referenceImagePixelBudget" : 16777216,
+      // @FezzedOne: The pixel limit for all image operations that operate on more than one pixel. Any image operation that would process
+      // more pixels than the limit would allow immediately stops image processing before that operation occurs; @LumiKalt's optimisations
+      // are accounted for when counting pixels, allowing large scale operations to pass under the radar if optimised out. This limit prevents
+      // certain potential denial-of-service exploits.
+      "imageOperationPixelLimit" : 16777216,
+      // @FezzedOne: The raw character/byte limit for all directive strings parsed by the engine. Any image directive string exceeding this
+      // limit is not parsed and logs an error, leaving the image unprocessed.
+      "directiveStringLengthLimit" : 16777216,
+      // @FezzedOne: Parsed directives are stored in a global time-to-live cache to prevent having to reparse the same directives again and again.
+      // This setting controls the time to live for directives in the cache.
+      "directivesCacheTimeToLive" : 300,
+
       // In seconds, audio less than this long will be decompressed in memory.
       "audioDecompressLimit" : 4.0,
 
@@ -196,6 +213,11 @@ Root::Settings RootLoader::rootSettingsForOptions(Options const& options) const 
 
     Root::Settings rootSettings;
     rootSettings.assetsSettings.assetTimeToLive = assetsSettings.getInt("assetTimeToLive");
+    rootSettings.assetsSettings.referenceImageTimeToLive = assetsSettings.getFloat("referenceImageTimeToLive");
+    rootSettings.assetsSettings.referenceImagePixelBudget = assetsSettings.getUInt("referenceImagePixelBudget");
+    rootSettings.assetsSettings.imageOperationPixelLimit = assetsSettings.getUInt("imageOperationPixelLimit");
+    rootSettings.assetsSettings.directiveStringLengthLimit = assetsSettings.getUInt("directiveStringLengthLimit");
+    rootSettings.assetsSettings.directivesCacheTimeToLive = assetsSettings.getFloat("directivesCacheTimeToLive");
     rootSettings.assetsSettings.audioDecompressLimit = assetsSettings.getFloat("audioDecompressLimit");
     rootSettings.assetsSettings.workerPoolSize = assetsSettings.getUInt("workerPoolSize");
     rootSettings.assetsSettings.missingImage = assetsSettings.optString("missingImage");
@@ -276,6 +298,19 @@ Root::Settings RootLoader::rootSettingsForOptions(Options const& options) const 
       rootSettings.runtimeConfigFile = *rc;
     else
       rootSettings.runtimeConfigFile = m_defaults.runtimeConfigFile;
+
+    size_t constexpr MaxModDataSize = 4 * 1024 * 1024;
+    Json jMaxModDataSize = bootConfig.get("maxModDataSize", Json());
+    if (jMaxModDataSize.isType(Json::Type::Int)) {
+      int64_t maxModDataSize = jMaxModDataSize.toInt();
+      if (maxModDataSize < 0)
+        ::printf("[xSB] Warning: \"maxModDataSize\" in boot config not a non-negative integer; ignoring and using default of %zu bytes.", MaxModDataSize);
+      rootSettings.maxModDataSize = maxModDataSize >= 0 ? jMaxModDataSize.toUInt() : MaxModDataSize;
+    } else {
+      if (!jMaxModDataSize.isNull())
+        ::printf("[xSB] Warning: \"maxModDataSize\" in boot config not a non-negative integer; ignoring and using default of %zu bytes.", MaxModDataSize);
+      rootSettings.maxModDataSize = MaxModDataSize;
+    }
 
     return rootSettings;
 
