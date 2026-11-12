@@ -376,7 +376,9 @@ Assets::Assets(Settings settings, StringList assetSources) {
             // FezzedOne: Add all metadata keys from the base asset source to any memory asset source derived from it, then change the name accordingly.
             JsonObject memoryMetadata = source->metadata(); // { {"name", memoryName} };
             memoryMetadata.set("name", memoryName);
-            auto memoryAssets = make_shared<MemoryAssetSource>(memoryName, memoryMetadata);
+            auto memoryAssetsPtr = makeObject<MemoryAssetSource>(memoryName, memoryMetadata);
+            auto memoryAssets = SmugglePtr<MemoryAssetSource>(memoryAssetsPtr);
+            auto sourceHandle = SmugglePtr(source);
 
             Logger::info("Running {} preprocessing scripts for asset source '{}': {}", groupName == "onLoad" ? "on-load" : "post-load", sourceNameStr, *scriptGroup);
 
@@ -384,7 +386,7 @@ Assets::Assets(Settings settings, StringList assetSources) {
               auto context = luaEngine->createContext();
 
               // FezzedOne: Added `require` to preprocessor scripts.
-              context.setRequireFunction([&](LuaContext& context, LuaString const& module) {
+              context.setRequireFunction([&, sourceHandle](LuaContext& context, LuaString const& module) {
                 if (!context.get("_SBLOADED").is<LuaTable>())
                   context.set("_SBLOADED", context.createTable());
                 auto t = context.get<LuaTable>("_SBLOADED");
@@ -394,8 +396,11 @@ Assets::Assets(Settings settings, StringList assetSources) {
                   ByteArray script;
                   if (m_files.contains(path)) {
                     script = this->read(path);
+                  } else if (sourceHandle) {
+                    // FezzedOne: Needed in case `require` gets smuggled.
+                    script = sourceHandle->read(path);
                   } else {
-                    script = source->read(path);
+                    return;
                   }
                   context.load(script, path);
                 }
@@ -407,45 +412,51 @@ Assets::Assets(Settings settings, StringList assetSources) {
                 context.remove("assets");
                 auto callbacks = makeBaseAssetCallbacks(false);
                 callbacks.registerCallback("add", [this, &source, &memoryAssets](LuaEngine& engine, String const& path, LuaValue const& data) {
-                  ByteArray bytes;
-                  Image imageCopy;
-                  bool isImage = false;
-                  if (auto str = engine.luaMaybeTo<String>(data))
-                    bytes = ByteArray(str->utf8Ptr(), str->utf8Size());
-                  else if (auto image = engine.luaMaybeTo<Image>(data)) {
-                    imageCopy = *image;
-                    isImage = true;
-                  } else if (auto rawBytes = engine.luaMaybeTo<ByteArray>(data)) {
-                    bytes = *rawBytes;
-                  } else {
-                    auto json = engine.luaTo<Json>(data).repr();
-                    bytes = ByteArray(json.utf8Ptr(), json.utf8Size());
-                  }
-                  if (isImage)
-                    memoryAssets->set(path, imageCopy);
-                  else
-                    memoryAssets->set(path, bytes);
+                  // FezzedOne: Needs a lifetime check because of a shared Lua VM.
+                  if (memoryAssets) {
+                    auto assetSourceHandle = memoryAssets.m_ptr.ptr<std::weak_ptr<MemoryAssetSource>>()->lock();
+                    ByteArray bytes;
+                    Image imageCopy;
+                    bool isImage = false;
+                    if (auto str = engine.luaMaybeTo<String>(data))
+                      bytes = ByteArray(str->utf8Ptr(), str->utf8Size());
+                    else if (auto image = engine.luaMaybeTo<Image>(data)) {
+                      imageCopy = *image;
+                      isImage = true;
+                    } else if (auto rawBytes = engine.luaMaybeTo<ByteArray>(data)) {
+                      bytes = *rawBytes;
+                    } else {
+                      auto json = engine.luaTo<Json>(data).repr();
+                      bytes = ByteArray(json.utf8Ptr(), json.utf8Size());
+                    }
+                    if (isImage)
+                      memoryAssets->set(path, imageCopy);
+                    else
+                      memoryAssets->set(path, bytes);
 
-                  // FezzedOne: Make sure the asset gets added to the overall file list.
-                  if (m_files.ptr(path)) {
-                    auto& descriptor = m_files[path];
-                    descriptor.sourceName = path;
-                    descriptor.source = memoryAssets;
-                  } else {
-                    m_files[path] = {
-                        // FezzedOne: Fixed MSVC compatibility.
-                        path,
-                        memoryAssets,
-                        {},
-                    };
+                    // FezzedOne: Make sure the asset gets added to the overall file list.
+                    if (m_files.ptr(path)) {
+                      auto& descriptor = m_files[path];
+                      descriptor.sourceName = path;
+                      descriptor.source = assetSourceHandle;
+                    } else {
+                      m_files[path] = {
+                          // FezzedOne: Fixed MSVC compatibility.
+                          path,
+                          assetSourceHandle,
+                          {},
+                      };
+                    }
+                    m_filesByExtension[AssetPath::extension(path).toLower()].insert(path);
                   }
-                  m_filesByExtension[AssetPath::extension(path).toLower()].insert(path);
                 });
 
                 callbacks.registerCallback("patch", [this, &memoryAssets](String const& path, String const& patchPath) -> bool {
                   if (auto file = m_files.ptr(path)) {
-                    if (memoryAssets->contains(patchPath)) {
-                      file->patchSources.append(make_pair(patchPath, memoryAssets));
+                    // FezzedOne: Needs a lifetime check.
+                    if (memoryAssets && memoryAssets->contains(patchPath)) {
+                      auto assetSourceHandle = memoryAssets.m_ptr.ptr<std::weak_ptr<MemoryAssetSource>>()->lock();
+                      file->patchSources.append(make_pair(patchPath, assetSourceHandle));
                       return true;
                     } else {
                       if (auto asset = m_files.ptr(patchPath)) {
@@ -515,7 +526,7 @@ Assets::Assets(Settings settings, StringList assetSources) {
               Logger::error("Exception while loading {} scripts from asset source '{}': {}", groupName == "onLoad" ? "on-load" : "post-load", sourcePath, e.what());
             }
             if (!memoryAssets->empty())
-              addSource(strf("{}::{}", sourcePath, groupName), memoryAssets);
+              addSource(strf("{}::{}", sourcePath, groupName), memoryAssetsPtr);
           }
         }
       }
@@ -593,6 +604,11 @@ void Assets::hotReload() {
   m_assetsCache.clear();
   m_queue.clear();
   m_framesSpecifications.clear();
+}
+
+Assets::Settings Assets::settings() const {
+  MutexLocker assetsLocker(m_assetsMutex);
+  return m_settings;
 }
 
 StringList Assets::assetSources() const {
@@ -1330,6 +1346,7 @@ ImageConstPtr Assets::readImage(String const& path) const {
       for (auto const& pair : p->patchSources) {
         auto& patchPath = pair.first;
         auto& patchSource = pair.second;
+        auto patchSourceHandle = SmugglePtr(patchSource);
         auto patchStream = patchSource->read(patchPath);
         if (patchPath.endsWith(".lua") || patchPath.endsWith(".pluto")) {
           luaLocker.lock();
@@ -1345,7 +1362,7 @@ ImageConstPtr Assets::readImage(String const& path) const {
             startedNewContext = true;
           }
           // FezzedOne: Added `require` to image patch scripts.
-          context->setRequireFunction([&](LuaContext& context, LuaString const& module) {
+          context->setRequireFunction([&, patchSourceHandle](LuaContext& context, LuaString const& module) {
             if (!context.get("_SBLOADED").is<LuaTable>())
               context.set("_SBLOADED", context.createTable());
             auto t = context.get<LuaTable>("_SBLOADED");
@@ -1355,8 +1372,10 @@ ImageConstPtr Assets::readImage(String const& path) const {
               ByteArray script;
               if (m_files.contains(path)) {
                 script = this->read(path);
+              } else if (patchSourceHandle) {
+                script = patchSourceHandle->read(path);
               } else {
-                script = patchSource->read(path);
+                return;
               }
               context.load(script, path);
             }
@@ -1424,6 +1443,7 @@ Json Assets::readJson(String const& path) const {
     for (auto const& pair : patchSources) {
       auto& patchPath = pair.first;
       auto& patchSource = pair.second;
+      auto patchSourceHandle = SmugglePtr(patchSource);
       auto patchStream = patchSource->read(patchPath);
       // FezzedOne: Patches that return an invalid result or throw errors are now ignored, allowing the patched asset file to load.
       if (patchPath.endsWith(".lua") || patchPath.endsWith(".pluto")) {
@@ -1443,7 +1463,7 @@ Json Assets::readJson(String const& path) const {
         }
         try {
           // FezzedOne: Added `require` to JSON patch scripts.
-          context->setRequireFunction([&](LuaContext& context, LuaString const& module) {
+          context->setRequireFunction([&, patchSourceHandle](LuaContext& context, LuaString const& module) {
             if (!context.get("_SBLOADED").is<LuaTable>())
               context.set("_SBLOADED", context.createTable());
             auto t = context.get<LuaTable>("_SBLOADED");
@@ -1453,8 +1473,10 @@ Json Assets::readJson(String const& path) const {
               ByteArray script;
               if (m_files.contains(path)) {
                 script = this->read(path);
+              } else if (patchSourceHandle) {
+                script = patchSourceHandle->read(path);
               } else {
-                script = patchSource->read(path);
+                return;
               }
               context.load(script, path);
             }

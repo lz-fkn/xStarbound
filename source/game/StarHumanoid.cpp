@@ -250,6 +250,9 @@ EnumMap<Humanoid::State> const Humanoid::StateNames{
 Humanoid::Humanoid(Json const& config) : m_isMaster(true) {
   m_baseHumanoidConfig = config;
   m_previousOverrides = Json();
+  m_bodyHidden = false;
+  m_broadcastToStock = false;
+
   updateHumanoidConfigOverrides(JsonObject{});
 
   m_twoHanded = false;
@@ -270,9 +273,6 @@ Humanoid::Humanoid(Json const& config) : m_isMaster(true) {
   m_animationTimer = 0.0f;
 
   m_humanoidRotationSettings = HumanoidRotationSettings::Null;
-
-  m_bodyHidden = false;
-  m_broadcastToStock = false;
 }
 
 Humanoid::Humanoid(HumanoidIdentity const& identity)
@@ -2032,9 +2032,9 @@ Humanoid Humanoid::makeDummy(Gender gender) {
   humanoid.m_frontArmFrameset = assets->json("/humanoid/any/dummy.config:frontArm").toString();
   humanoid.m_backArmFrameset = assets->json("/humanoid/any/dummy.config:backArm").toString();
   // FezzedOne: Ensures the dummy doesn't have any hair.
-  humanoid.m_hairFrameset = "/assetmissing.png";
-  humanoid.m_facialHairFrameset = "/assetmissing.png";
-  humanoid.m_facialMaskFrameset = "/assetmissing.png";
+  humanoid.m_hairFrameset = "";
+  humanoid.m_facialHairFrameset = "";
+  humanoid.m_facialMaskFrameset = "";
   humanoid.setFacingDirection(DirectionNames.getLeft(assets->json("/humanoid/any/dummy.config:direction").toString()));
 
   return humanoid;

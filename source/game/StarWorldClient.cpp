@@ -708,8 +708,12 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
       }
     } else if (inspecting) {
       if (auto inspectable = as<InspectableEntity>(entity)) {
-        ed.highlightEffect = m_mainPlayer->inspectionHighlight(inspectable);
-        ed.highlightEffect.level *= inspectionFlickerMultiplier;
+        // FezzedOne: Disable inspection highlights for players for visual consistency with retail Starbound.
+        // Players remain inspectable, just not highlighted.
+        if (!is<Player>(inspectable)) {
+          ed.highlightEffect = m_mainPlayer->inspectionHighlight(inspectable);
+          ed.highlightEffect.level *= inspectionFlickerMultiplier;
+        }
       }
     }
     renderData.entityDrawables.append(std::move(ed));
@@ -2764,6 +2768,18 @@ void WorldClient::setDefaultEntityRenderDirectives(Maybe<Directives> const& dire
 
 int64_t WorldClient::latency() const {
   return m_latency;
+}
+
+// Kae's `resendEntity` from OpenStarbound.
+void WorldClient::resendEntity(EntityId entityId) {
+  auto entity = m_entityMap->entity(entityId);
+  if (!entity || !entity->isMaster() || !m_masterEntitiesNetVersion.contains(entity->entityId()))
+    return;
+
+  auto fromVersion = m_masterEntitiesNetVersion.take(entity->entityId());
+  ByteArray finalNetState = entity->writeNetState(fromVersion).first;
+  m_outgoingPackets.append(make_shared<EntityDestroyPacket>(entity->entityId(), std::move(finalNetState), false));
+  notifyEntityCreate(entity);
 }
 
 std::tuple<Maybe<Directives>, Maybe<Directives>, Maybe<Directives>> WorldClient::entityRenderDirectives(EntityId entityId) const {
